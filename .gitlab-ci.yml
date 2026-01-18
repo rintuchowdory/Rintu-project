@@ -85,10 +85,14 @@ review:
     policy: pull
 
 stop_review:
-  stage: cleanup
+  stage: cleanup  # or whatever stage comes after 'review'
   script:
-    - echo "Cleaning up review environment"
-
-      when: manual
-      only:
-        -branches
+    - echo "Stopping review environment"
+    # Add your cleanup commands here
+  when: manual
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  needs: ["review"]  # Link to your review job
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop
