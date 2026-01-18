@@ -1,0 +1,105 @@
+# .gitlab-ci.yml
+
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  # Set Node.js version if your project uses Node
+  NODE_VERSION: "18"
+
+# Cache node_modules to speed up builds
+cache:
+  paths:
+    - node_modules/
+    - .npm/
+
+# Run before each job
+before_script:
+  - echo "Starting CI/CD pipeline"
+  - echo "Job: $CI_JOB_NAME"
+
+# Test stage jobs
+test:
+  stage: test
+  script:
+    - echo "Running tests..."
+    # Example: if using Node.js
+    # - npm install
+    # - npm test
+    # Or for Python:
+    # - pip install -r requirements.txt
+    # - pytest
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - reports/junit.xml
+    paths:
+      - coverage/
+    expire_in: 1 week
+  only:
+    - main
+    - merge_requests
+
+# Lint job (code quality check)
+lint:
+  stage: test
+  script:
+    - echo "Running linter..."
+    # Example for JavaScript/TypeScript:
+    # - npm run lint
+    # Or for Python:
+    # - flake8 .
+  only:
+    - main
+    - merge_requests
+
+# Build stage job
+build:
+  stage: build
+  script:
+    - echo "Building project..."
+    # Example build commands:
+    # - npm run build
+    # - docker build -t myapp .
+  artifacts:
+    paths:
+      - dist/
+      - build/
+    expire_in: 1 week
+  only:
+    - main
+
+# Deploy to staging environment
+deploy_staging:
+  stage: deploy
+  script:
+    - echo "Deploying to staging environment..."
+    # Add your deployment commands here
+    # Example: rsync, kubectl, docker push, etc.
+  environment:
+    name: staging
+    url: https://staging.example.com
+  only:
+    - main
+
+# Deploy to production (manual approval needed)
+deploy_production:
+  stage: deploy
+  script:
+    - echo "Deploying to production..."
+    - echo "Production deployment requires manual approval"
+  environment:
+    name: production
+    url: https://example.com
+  when: manual
+  only:
+    - main
+
+# Schedule pipeline to run daily (optional)
+schedule:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: always
