@@ -1,105 +1,85 @@
-# .gitlab-ci.yml
+image: node:18
 
 stages:
+  - install
+  - lint
   - test
   - build
   - deploy
 
-variables:
-  # Set Node.js version if your project uses Node
-  NODE_VERSION: "18"
-
-# Cache node_modules to speed up builds
 cache:
   paths:
     - node_modules/
-    - .npm/
 
-# Run before each job
+variables:
+  CI: 'true'
+
 before_script:
-  - echo "Starting CI/CD pipeline"
-  - echo "Job: $CI_JOB_NAME"
+  - node --version
+  - npm --version
 
-# Test stage jobs
+install_dependencies:
+  stage: install
+  script:
+    - npm ci
+  artifacts:
+    paths:
+      - node_modules/
+  cache:
+    policy: push
+
+lint:
+  stage: lint
+  script:
+    - npm run lint
+  only:
+    - merge_requests
+    - main
+
 test:
   stage: test
   script:
-    - echo "Running tests..."
-    # Example: if using Node.js
-    # - npm install
-    # - npm test
-    # Or for Python:
-    # - pip install -r requirements.txt
-    # - pytest
-  artifacts:
-    when: always
-    reports:
-      junit:
-        - reports/junit.xml
-    paths:
-      - coverage/
-    expire_in: 1 week
+    - npm test
   only:
-    - main
     - merge_requests
-
-# Lint job (code quality check)
-lint:
-  stage: test
-  script:
-    - echo "Running linter..."
-    # Example for JavaScript/TypeScript:
-    # - npm run lint
-    # Or for Python:
-    # - flake8 .
-  only:
     - main
-    - merge_requests
 
-# Build stage job
 build:
   stage: build
   script:
-    - echo "Building project..."
-    # Example build commands:
-    # - npm run build
-    # - docker build -t myapp .
+    - npm run build
   artifacts:
     paths:
       - dist/
-      - build/
     expire_in: 1 week
   only:
     - main
+  cache:
+    policy: pull
 
-# Deploy to staging environment
-deploy_staging:
+pages:
   stage: deploy
   script:
-    - echo "Deploying to staging environment..."
-    # Add your deployment commands here
-    # Example: rsync, kubectl, docker push, etc.
-  environment:
-    name: staging
-    url: https://staging.example.com
+    - npm run build
+    - mv dist public
+  artifacts:
+    paths:
+      - public
   only:
     - main
 
-# Deploy to production (manual approval needed)
-deploy_production:
+# Review app (optional)
+review:
   stage: deploy
   script:
-    - echo "Deploying to production..."
-    - echo "Production deployment requires manual approval"
+    - echo "Deploying review app..."
+    - npm run build
   environment:
-    name: production
-    url: https://example.com
-  when: manual
-  only:
-    - main
-
-# Schedule pipeline to run daily (optional)
-schedule:
+    name: review/$CI_COMMIT_REF_SLUG
+    url: https://$CI_ENVIRONMENT_SLUG.example.com
+    on_stop: stop_review
   rules:
-    - if: $CI_PIPELINE_SOURCE == "schedule"
-      when: always
+    - if: $CI_MERGE_REQUEST_ID
+      when: manual
+  cache:
+    policy: pull
