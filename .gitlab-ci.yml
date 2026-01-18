@@ -1,98 +1,212 @@
-image: node:18
+# .gitlab-ci.yml
+# GitLab CI/CD Configuration File
 
+# Define stages in order of execution
 stages:
-  - install
-  - lint
-  - test
   - build
+  - test
   - deploy
+  - review
+  - cleanup
 
+# Variables available to all jobs
+variables:
+  APP_NAME: "my-app"
+  DOCKER_REGISTRY: "registry.example.com"
+  ENVIRONMENT: "production"
+
+# Cache configuration
 cache:
+  key: "${CI_COMMIT_REF_SLUG}"
   paths:
     - node_modules/
+    - .gradle/
+    - vendor/bundle
+  policy: pull-push
 
-variables:
-  CI: 'true'
-
+# Before script runs before each job (unless overridden)
 before_script:
-  - node --version
-  - npm --version
+  - echo "Starting job for ${CI_PROJECT_NAME}"
+  - export COMMIT_SHA_SHORT=${CI_COMMIT_SHORT_SHA}
 
-install_dependencies:
-  stage: install
-  script:
-    - npm ci
-  artifacts:
-    paths:
-      - node_modules/
-  cache:
-    policy: push
+# After script runs after each job (unless overridden)
+after_script:
+  - echo "Job ${CI_JOB_NAME} completed"
 
-lint:
-  stage: lint
-  script:
-    - npm run lint
-  only:
-    - merge_requests
-    - main
-
-test:
-  stage: test
-  script:
-    - npm test
-  only:
-    - merge_requests
-    - main
+########################################
+# BUILD STAGE
+########################################
 
 build:
   stage: build
+  image: maven:3.8-openjdk-17  # or node:16, python:3.9, etc.
   script:
-    - npm run build
+    - echo "Building application..."
+    - mvn clean package  # or npm run build, gradle build, etc.
   artifacts:
     paths:
-      - dist/
+      - target/*.jar  # or dist/, build/, etc.
     expire_in: 1 week
   only:
     - main
-  cache:
-    policy: pull
+    - develop
+    - merge_requests
 
-pages:
-  stage: deploy
+########################################
+# TEST STAGE
+########################################
+
+unit-test:
+  stage: test
+  image: maven:3.8-openjdk-17
   script:
-    - npm run build
-    - mv dist public
+    - echo "Running unit tests..."
+    - mvn test
   artifacts:
-    paths:
-      - public
+    reports:
+      junit:
+        - target/surefire-reports/TEST-*.xml
+  needs: ["build"]
   only:
     - main
+    - develop
+    - merge_requests
 
-# Review app (optional)
-review:
+integration-test:
+  stage: test
+  image: maven:3.8-openjdk-17
+  script:
+    - echo "Running integration tests..."
+    - mvn verify -DskipUnitTests
+  needs: ["build"]
+  only:
+    - main
+    - develop
+  when: manual  # Manual trigger
+
+########################################
+# DEPLOY STAGE
+########################################
+
+deploy-prod:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - echo "Deploying to production..."
+    - apk add --no-cache curl
+    - curl -X POST https://api.example.com/deploy --data "commit=${CI_COMMIT_SHA}"
+  environment:
+    name: production
+    url: https://myapp.example.com
+  only:
+    - main
+  when: manual  # Usually manual for production
+
+deploy-staging:
   stage: deploy
   script:
-    - echo "Deploying review app..."
-    - npm run build
+    - echo "Deploying to staging..."
+    - ./scripts/deploy.sh staging
   environment:
-    name: review/$CI_COMMIT_REF_SLUG
-    url: https://$CI_ENVIRONMENT_SLUG.example.com
-    on_stop: stop_review
-  rules:
-    - if: $CI_MERGE_REQUEST_ID
-      when: manual
-  cache:
-    policy: pull
+    name: staging
+    url: https://staging.myapp.example.com
+  only:
+    - develop
 
-stop_review:
-  stage: cleanup  # or whatever stage comes after 'review'
+########################################
+# REVIEW STAGE (Environment per MR)
+########################################
+
+review:
+  stage: review
+  image: alpine:latest
   script:
-    - echo "Stopping review environment"
-    # Add your cleanup commands here
-  when: manual
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-  needs: ["review"]  # Link to your review job
+    - echo "Deploying review app for MR ${CI_MERGE_REQUEST_IID}"
+    - echo "Application URL: https://review-${CI_MERGE_REQUEST_IID}.example.com"
+    - ./scripts/deploy_review.sh
   environment:
     name: review/$CI_COMMIT_REF_NAME
-    action: stop
+    url: https://review-${CI_MERGE_REQUEST_IID}.example.com
+    on_stop: stop_review  # This triggers stop_review when review job is stopped
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+    - when: never
+
+# THIS IS THE JOB THAT WAS MISSING IN YOUR CONFIG
+stop_review:
+  stage: cleanup
+  image: alpine:latest
+  script:
+    - echo "Cleaning up review environment for MR ${CI_MERGE_REQUEST_IID}"
+    - ./scripts/cleanup_review.sh
+  environment:
+    name: review/$CI_COMMIT_REF_NAME
+    action: stop  # This stops the environment
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+    - when: never
+  needs: ["review"]  # Only runs after review job
+
+########################################
+# CLEANUP STAGE
+########################################
+
+cleanup:
+  stage: cleanup
+  script:
+    - echo "Cleaning up temporary files..."
+    - rm -rf tmp/
+  when: always  # Runs even if previous jobs fail
+
+########################################
+# SECURITY SCANNING (Optional)
+########################################
+
+sast:
+  stage: test
+  image: 
+    name: "gitlab/gitlab-owasp-zap:latest"
+    entrypoint: [""]
+  variables:
+    SAST_EXCLUDED_PATHS: "spec, test, tests, tmp"
+  script:
+    - /zap/zap-baseline.py -t https://example.com
+  artifacts:
+    reports:
+      sast: gl-sast-report.json
+  only:
+    - main
+    - merge_requests
+
+########################################
+# NOTIFICATIONS
+########################################
+
+notify-success:
+  stage: cleanup
+  script:
+    - echo "Pipeline succeeded! Sending notification..."
+    - curl -X POST https://api.slack.com/webhook -d '{"text":"Pipeline succeeded!"}'
+  when: on_success
+
+notify-failure:
+  stage: cleanup
+  script:
+    - echo "Pipeline failed! Sending notification..."
+    - curl -X POST https://api.slack.com/webhook -d '{"text":"Pipeline failed!"}'
+  when: on_failure
+
+########################################
+# WORKFLOW RULES (Control when pipeline runs)
+########################################
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_MESSAGE =~ /skip-ci/
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - when: never
