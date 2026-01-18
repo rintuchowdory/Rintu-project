@@ -1,5 +1,5 @@
 # .gitlab-ci.yml
-# GitLab CI/CD Configuration File
+# GitLab CI/CD Configuration File - Copy Mode
 
 # Define stages in order of execution
 stages:
@@ -39,18 +39,16 @@ after_script:
 
 build:
   stage: build
-  image: maven:3.8-openjdk-17  # or node:16, python:3.9, etc.
+  image: maven:3.8-openjdk-17
   script:
     - echo "Building application..."
-    - mvn clean package  # or npm run build, gradle build, etc.
+    - mvn clean package
   artifacts:
     paths:
-      - target/*.jar  # or dist/, build/, etc.
+      - target/*.jar
     expire_in: 1 week
-  only:
-    - main
-    - develop
-    - merge_requests
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop" || $CI_PIPELINE_SOURCE == "merge_request_event"'
 
 ########################################
 # TEST STAGE
@@ -64,13 +62,10 @@ unit-test:
     - mvn test
   artifacts:
     reports:
-      junit:
-        - target/surefire-reports/TEST-*.xml
+      junit: target/surefire-reports/TEST-*.xml
   needs: ["build"]
-  only:
-    - main
-    - develop
-    - merge_requests
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop" || $CI_PIPELINE_SOURCE == "merge_request_event"'
 
 integration-test:
   stage: test
@@ -79,10 +74,9 @@ integration-test:
     - echo "Running integration tests..."
     - mvn verify -DskipUnitTests
   needs: ["build"]
-  only:
-    - main
-    - develop
-  when: manual  # Manual trigger
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop"'
+  when: manual
 
 ########################################
 # DEPLOY STAGE
@@ -98,20 +92,21 @@ deploy-prod:
   environment:
     name: production
     url: https://myapp.example.com
-  only:
-    - main
-  when: manual  # Usually manual for production
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  when: manual
 
 deploy-staging:
   stage: deploy
+  image: alpine:latest
   script:
     - echo "Deploying to staging..."
     - ./scripts/deploy.sh staging
   environment:
     name: staging
     url: https://staging.myapp.example.com
-  only:
-    - develop
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
 
 ########################################
 # REVIEW STAGE (Environment per MR)
@@ -127,13 +122,12 @@ review:
   environment:
     name: review/$CI_COMMIT_REF_NAME
     url: https://review-${CI_MERGE_REQUEST_IID}.example.com
-    on_stop: stop_review  # This triggers stop_review when review job is stopped
+    on_stop: stop_review
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
     - when: never
 
-# THIS IS THE JOB THAT WAS MISSING IN YOUR CONFIG
 stop_review:
   stage: cleanup
   image: alpine:latest
@@ -142,12 +136,12 @@ stop_review:
     - ./scripts/cleanup_review.sh
   environment:
     name: review/$CI_COMMIT_REF_NAME
-    action: stop  # This stops the environment
+    action: stop
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
     - when: never
-  needs: ["review"]  # Only runs after review job
+  needs: ["review"]
 
 ########################################
 # CLEANUP STAGE
@@ -158,7 +152,7 @@ cleanup:
   script:
     - echo "Cleaning up temporary files..."
     - rm -rf tmp/
-  when: always  # Runs even if previous jobs fail
+  when: always
 
 ########################################
 # SECURITY SCANNING (Optional)
@@ -166,19 +160,16 @@ cleanup:
 
 sast:
   stage: test
-  image: 
-    name: "gitlab/gitlab-owasp-zap:latest"
-    entrypoint: [""]
+  image: gitlab/gitlab-owasp-zap:latest
   variables:
     SAST_EXCLUDED_PATHS: "spec, test, tests, tmp"
   script:
-    - /zap/zap-baseline.py -t https://example.com
+    - zap-baseline.py -t https://example.com
   artifacts:
     reports:
       sast: gl-sast-report.json
-  only:
-    - main
-    - merge_requests
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_PIPELINE_SOURCE == "merge_request_event"'
 
 ########################################
 # NOTIFICATIONS
@@ -204,9 +195,9 @@ notify-failure:
 
 workflow:
   rules:
-    - if: $CI_COMMIT_MESSAGE =~ /skip-ci/
+    - if: '$CI_COMMIT_MESSAGE =~ /skip-ci/'
       when: never
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == "main"
-    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
     - when: never
