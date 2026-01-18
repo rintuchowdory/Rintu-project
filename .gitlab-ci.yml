@@ -83,3 +83,14 @@ review:
       when: manual
   cache:
     policy: pull
+
+stop_review:
+  stage: deploy
+  script:
+    - echo "Stopping review app..."
+  environment:
+    name: review/$CI_COMMIT_REF_SLUG
+    action: stop
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+      when: manual
