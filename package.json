@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "test": "echo 'No tests yet' && exit 0"
+    "test": "echo 'No tests yet' && exit 0",
+    "deploy": "gh-pages -d dist --remote github"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -21,10 +22,11 @@
     "@types/react": "^18.3.27",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.0.0",
-    "eslint": "^9.39.2",
-    "eslint-plugin-react": "^7.37.5",
+    "eslint": "^10.0.1",
+    "eslint-plugin-react": "^7.22.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.0",
+    "gh-pages": "^6.3.0",
     "globals": "^17.0.0",
     "typescript": "^5.0.2",
     "typescript-eslint": "^8.53.0",
