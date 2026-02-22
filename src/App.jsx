@@ -152,7 +152,7 @@ export default function App() {
           <div className="section-label">Get In Touch</div>
           <h1 className="contact-heading reveal">Let us build<br/>something <em>great</em></h1>
           <p className="contact-sub reveal reveal-delay-1">Available for freelance projects and collaborations</p>
-          <a href="mailto:rintu.chowdory@email.com" className="contact-email reveal reveal-delay-2">rintu.chowdory@email.com</a>
+          <a href="mailto:Chowdoryrintu@yahoo.com" className="contact-email reveal reveal-delay-2">Chowdoryrintu@yahoo.com</a>
           <div className="social-links reveal reveal-delay-3">
             {[["GitHub","https://github.com"],["GitLab","https://gitlab.com/rintu-group"],["LinkedIn","https://linkedin.com"],["Twitter","https://twitter.com"]].map(([n,u])=><a key={n} href={u} target="_blank" rel="noreferrer" className="social-link">{n}</a>)}
           </div>
