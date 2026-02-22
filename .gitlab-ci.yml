@@ -1,0 +1,77 @@
+# .gitlab-ci.yml
+# GitLab CI/CD Configuration for Vite React Project
+
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  NODE_VERSION: "18"
+  CACHE_KEY: "${CI_COMMIT_REF_SLUG}"
+
+cache:
+  key: ${CACHE_KEY}
+  paths:
+    - node_modules/
+    - .npm/
+
+before_script:
+  - echo "Starting job for ${CI_PROJECT_NAME}"
+  - node --version
+  - npm --version
+
+########################################
+# BUILD STAGE
+########################################
+
+build:
+  stage: build
+  image: node:18-alpine
+  script:
+    - echo "Installing dependencies..."
+    - npm ci
+    - echo "Building application..."
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+
+########################################
+# TEST STAGE
+########################################
+
+lint:
+  stage: test
+  image: node:18-alpine
+  script:
+    - echo "Running ESLint..."
+    - npm ci
+    - npm run lint
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH == "develop" || $CI_PIPELINE_SOURCE == "merge_request_event"'
+  allow_failure: true
+
+########################################
+# DEPLOY STAGE
+########################################
+
+pages:
+  stage: deploy
+  image: node:18-alpine
+  script:
+    - echo "Building for deployment..."
+    - npm ci
+    - npm run build
+    - mkdir -p public
+    - cp -r dist/* public/
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  only:
+    - main
